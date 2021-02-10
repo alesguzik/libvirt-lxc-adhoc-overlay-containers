@@ -1,0 +1,5 @@
+#!/bin/sh
+set -e
+
+virsh -c lxc:/// destroy "$1"
+c-overlays unmount-single "$1" 2>/dev/null

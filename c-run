@@ -1,0 +1,20 @@
+#!/bin/sh
+containers_root="/home/me/p/c"
+container_name="${1:-debian}"
+shift
+container_root="$containers_root/$container_name"
+
+function to_internal {
+  echo "$1" | sed \
+    -e "s|^$container_root||" \
+    -e 's|^/home/me|/home/user/me|'
+}
+
+file="$(mktemp --tmpdir="$container_root/tmp" "u-cmd.XXXXXXX")"
+cat <<'EOF' > "$file"
+  cd "$1"
+  shift
+  [ -n "$1" ] && exec "$@"
+  exec bash
+EOF
+ssh "user@$container_name" -o LogLevel=QUIET -t /bin/bash -i "$(to_internal "$file")" "$(to_internal `pwd`)" "$@"

@@ -1,0 +1,3 @@
+#!/bin/sh
+c-overlays mount-single "$1" 2>/dev/null
+virsh -c lxc:/// start "$1"

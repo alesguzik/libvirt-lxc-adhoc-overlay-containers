@@ -1,0 +1,65 @@
+#!/usr/bin/env bash
+
+set -e
+
+basedir="$(dirname "$(realpath "$0")")"
+#basedir="/home/me/p/c"
+overlaydir="$basedir/_overlays"
+
+function die {
+  echo "$@" 1>&2
+  exit 1
+}
+
+function ensure_overlay {
+  export container_name="$1"
+  [ -n "$container_name" ] || die "Container name is empty"
+
+  export lowest_link="$overlaydir/$container_name/lowest"
+  export      lower="$overlaydir/$container_name/lower"
+  export      upper="$overlaydir/$container_name/upper"
+  export       work="$overlaydir/$container_name/work"
+
+  [ -L "$lowest_link" ] || die "No overlay for $container_name"
+
+  export lowest="$(realpath "$lowest_link")"
+  export target="$basedir/$container_name"
+  export overlay_options="lowerdir=$lower:$lowest,upperdir=$upper,workdir=$work"
+}
+
+function is_mounted {
+  mount|grep "^overlay on $target " > /dev/null
+}
+
+function mount_overlay {
+  ensure_overlay "$1"
+  if is_mounted ; then return ; fi
+  if [ -d "$target" ] && [ -n "$(ls -A "$target")" ]; then
+    die "$target directory already exists and is not empty. Probably overlay wasn't unmounted properly. Aborting."
+  fi
+  mkdir -p "$target" "$upper" "$work"
+  sudo mount -t overlay overlay -o "$overlay_options" "$target"
+  echo "Mounted $1"
+}
+ 
+function unmount_overlay {
+  ensure_overlay "$1"
+  if ! is_mounted ; then return ; fi
+  sudo umount -t overlay -O "$overlay_options" "$target" || true
+  rmdir "$target" || die "$target is not empty"
+  echo "Unmounted $1"
+}
+
+function each_container {
+  for container_name in $(find "$overlaydir/" -mindepth 1 -maxdepth 1 -type d -printf "%P\n"); do
+    "$@" "$container_name" 
+  done
+}
+
+case "$1" in
+  ''|mount)    each_container mount_overlay ;;
+  '-'|unmount) each_container unmount_overlay ;;
+  mount-single)   mount_overlay "$2" ;;
+  unmount-single) unmount_overlay "$2" ;;
+  *) echo "Unknown command $1" ; exit 1 ;;
+esac
